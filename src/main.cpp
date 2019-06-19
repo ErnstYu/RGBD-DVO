@@ -7,6 +7,7 @@
 
 const std::string DATASET = "../data/test";
 const Eigen::Vector4f INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
+const float FACTOR = 5000.0;
 
 std::vector<Sophus::SE3f> tforms;
 
@@ -57,8 +58,12 @@ int main() {
     cImg = cv::imread(inputRGBPaths[i], cv::IMREAD_GRAYSCALE);
     cDep = cv::imread(inputDepPaths[i], cv::IMREAD_GRAYSCALE);
 
-    DirectOdometry dvo(pImg, pDep, cImg, INTR);
+    DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
     tforms.push_back(dvo.optimize());
+    
+    std::cout << tforms[i - 1].translation().transpose() * FACTOR << ' ';
+    Eigen::Quaternionf quat(tforms[i - 1].rotationMatrix());
+    std::cout << quat.x() << ' ' << quat.y() << ' ' << quat.z() << ' ' << quat.w() << std::endl;
 
     pImg = cImg.clone();
     pDep = cDep.clone();

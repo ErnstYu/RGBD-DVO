@@ -30,21 +30,23 @@ private:
 
   void makePyramid();
 
-  void calcGradient(const cv::Mat &img, cv::Mat &gradient, int direction);
+  void calcGradient(const cv::Mat &img, cv::Mat &grad_x, cv::Mat &grad_y);
 
-  Eigen::VectorXf calcResiduals(const Sophus::SE3f &xi, const int level);
+  void calcResiduals(const Sophus::SE3f &xi, const int level,
+                     Eigen::VectorXf &residuals);
 
-  Eigen::MatrixXf calcJacobian(const Sophus::SE3f &xi, const int level);
+  void calcJacobian(const Sophus::SE3f &xi, const int level,
+                    Eigen::MatrixXf &J);
 
   void weighting(const Eigen::VectorXf &residuals, Eigen::VectorXf &weights);
 
 public:
   DirectOdometry(const cv::Mat &pImg, const cv::Mat &pDep, const cv::Mat &cImg,
-                 const Eigen::Vector4f &intr) {
+                 const Eigen::Vector4f &intr, const float FACTOR) {
 
     pImg.convertTo(this->pImg, CV_32FC1, 1.0 / 255.0);
     cImg.convertTo(this->cImg, CV_32FC1, 1.0 / 255.0);
-    pDep.convertTo(this->pDep, CV_32FC1);
+    pDep.convertTo(this->pDep, CV_32FC1, 1.0 / FACTOR);
     this->intr = intr;
   }
 
