@@ -38,6 +38,8 @@ if(OpenCV_VERSION VERSION_LESS 3)
 endif()
 
 add_library(directOdometry src/directOdometry.cpp)
+target_link_libraries(directOdometry ${OpenCV_LIBS})
+
 add_executable(main src/main.cpp)
 target_link_libraries(main directOdometry ${OpenCV_LIBS})
 

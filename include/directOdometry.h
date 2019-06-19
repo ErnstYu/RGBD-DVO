@@ -4,7 +4,7 @@
 #include <Eigen/Cholesky>
 #include <Eigen/Core>
 #include <Eigen/Dense>
-#include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <sophus/se3.hpp>
 
 class DirectOdometry {
@@ -21,6 +21,10 @@ private:
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> pImg_Pyramid;
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> pDep_Pyramid;
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> cImg_Pyramid;
+
+  std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> gradx_Pyramid;
+  std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> grady_Pyramid;
+
   std::vector<Eigen::Vector4f, Eigen::aligned_allocator<Eigen::Vector4f>>
       intr_Pyramid;
 
@@ -34,6 +38,8 @@ private:
 
   void calcResiduals(const Sophus::SE3f &xi, const int level,
                      Eigen::VectorXf &residuals);
+
+  void showError(const Sophus::SE3f &xi, const int level);
 
   void calcJacobian(const Sophus::SE3f &xi, const int level,
                     Eigen::MatrixXf &J);

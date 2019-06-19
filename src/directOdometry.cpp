@@ -1,3 +1,4 @@
+#include <cstring>
 #include <directOdometry.h>
 
 float interpolate(const float *img_ptr, float x, float y, int w, int h) {
@@ -108,11 +109,52 @@ cv::Mat downsampleDepth(const cv::Mat &depth) {
   return depth_ds;
 }
 
+void DirectOdometry::calcGradient(const cv::Mat &img, cv::Mat &grad_x,
+                                  cv::Mat &grad_y) {
+
+  int w = img.cols;
+  int h = img.rows;
+  float *input_ptr = (float *)img.data;
+
+  grad_x = cv::Mat::zeros(h, w, CV_32FC1);
+  float *output_ptr = (float *)grad_x.data;
+  for (int y = 0; y < h; ++y) {
+    output_ptr[y * w] = input_ptr[y * w + 1] - input_ptr[y * w];
+    output_ptr[y * w + w - 1] =
+        input_ptr[y * w + w - 1] - input_ptr[y * w + w - 2];
+
+    for (int x = 1; x < w - 1; ++x) {
+      float v0 = input_ptr[y * w + (x - 1)];
+      float v1 = input_ptr[y * w + (x + 1)];
+      output_ptr[y * w + x] = (v1 - v0) / 2;
+    }
+  }
+
+  grad_y = cv::Mat::zeros(h, w, CV_32FC1);
+  output_ptr = (float *)grad_y.data;
+  for (int x = 0; x < w; ++x) {
+    output_ptr[x] = input_ptr[w + x] - input_ptr[x];
+    output_ptr[(h - 1) * w + x] =
+        input_ptr[(h - 1) * w + x] - input_ptr[(h - 2) * w + x];
+
+    for (int y = 1; y < h - 1; ++y) {
+      float v0 = input_ptr[(y - 1) * w + x];
+      float v1 = input_ptr[(y + 1) * w + x];
+      output_ptr[y * w + x] = (v1 - v0) / 2;
+    }
+  }
+}
+
 void DirectOdometry::makePyramid() {
   intr_Pyramid.push_back(this->intr);
   pImg_Pyramid.push_back(this->pImg);
   pDep_Pyramid.push_back(this->pDep);
   cImg_Pyramid.push_back(this->cImg);
+
+  cv::Mat grad_x, grad_y;
+  calcGradient(this->cImg, grad_x, grad_y);
+  gradx_Pyramid.push_back(grad_x);
+  grady_Pyramid.push_back(grad_y);
 
   for (int i = 1; i < NUM_PYRAMID; ++i) {
     // downsample camera matrix
@@ -132,9 +174,12 @@ void DirectOdometry::makePyramid() {
     // downsample depth images
     cv::Mat pDepDown = downsampleDepth(pDep_Pyramid[i - 1]);
     pDep_Pyramid.push_back(pDepDown);
-  }
 
-  return;
+    // calculate image gradient
+    calcGradient(cImgDown, grad_x, grad_y);
+    gradx_Pyramid.push_back(grad_x);
+    grady_Pyramid.push_back(grad_y);
+  }
 }
 
 void DirectOdometry::calcResiduals(const Sophus::SE3f &xi, const int level,
@@ -163,7 +208,7 @@ void DirectOdometry::calcResiduals(const Sophus::SE3f &xi, const int level,
 
   residuals = Eigen::VectorXf::Zero(w * h);
 
-  for (int v = 0; v < h; ++v) {
+  for (int v = 0; v < h; ++v)
     for (int u = 0; u < w; ++u) {
       int pos = v * w + u;
 
@@ -172,17 +217,14 @@ void DirectOdometry::calcResiduals(const Sophus::SE3f &xi, const int level,
       pt3d = R * pt3d + t;
 
       if (pt3d[2] > 0.0) {
-        Eigen::Vector2f pt2d(fx * pt3d[0] / pt3d[2] + cx,
-                             fy * pt3d[1] / pt3d[2] + cy);
+        float x = fx * pt3d[0] / pt3d[2] + cx;
+        float y = fy * pt3d[1] / pt3d[2] + cy;
 
-        float color_warped = interpolate(ptr_cImg, pt2d[0], pt2d[1], w, h);
-        if (!std::isnan(color_warped)) {
-
+        float color_warped = interpolate(ptr_cImg, x, y, w, h);
+        if (!std::isnan(color_warped))
           residuals[pos] = color_warped - ptr_pImg[pos];
-        }
       }
     }
-  }
 }
 
 void DirectOdometry::weighting(const Eigen::VectorXf &residuals,
@@ -217,36 +259,53 @@ void DirectOdometry::weighting(const Eigen::VectorXf &residuals,
   }
 }
 
-void DirectOdometry::calcGradient(const cv::Mat &img, cv::Mat &grad_x,
-                                  cv::Mat &grad_y) {
+void DirectOdometry::showError(const Sophus::SE3f &xi, const int level) {
+  static int itr = 0;
+  Eigen::Vector4f intr_level = intr_Pyramid[0];
+  cv::Mat cImg_level = cImg_Pyramid[0];
+  cv::Mat pImg_level = pImg_Pyramid[0];
+  cv::Mat pDep_level = pDep_Pyramid[0];
 
-  int w = img.cols;
-  int h = img.rows;
-  float *input_ptr = (float *)img.data;
+  int w = pImg_level.cols;
+  int h = pImg_level.rows;
 
-  float *output_ptr = (float *)grad_x.data;
-  for (int y = 0; y < h; ++y) {
-    output_ptr[y * w] = input_ptr[y * w + 1] - input_ptr[y * w];
-    output_ptr[y * w + w - 1] = input_ptr[y * w + w - 1] - input_ptr[y * w + w - 2];
+  // camera intrinsics
+  float fx = intr_level(0);
+  float fy = intr_level(1);
+  float cx = intr_level(2);
+  float cy = intr_level(3);
 
-    for (int x = 1; x < w - 1; ++x) {
-      float v0 = input_ptr[y * w + (x - 1)];
-      float v1 = input_ptr[y * w + (x + 1)];
-      output_ptr[y * w + x] = (v1 - v0) / 2;
+  Eigen::Matrix3f R = xi.rotationMatrix();
+  Eigen::Vector3f t = xi.translation();
+
+  float *ptr_pImg = (float *)pImg_level.data;
+  float *ptr_pDep = (float *)pDep_level.data;
+  float *ptr_cImg = (float *)cImg_level.data;
+
+  cv::Mat err = cv::Mat::zeros(h, w, CV_32FC1);
+  float *ptr_err = (float *)err.data;
+
+  for (int v = 0; v < h; ++v) {
+    for (int u = 0; u < w; ++u) {
+      int pos = v * w + u;
+
+      Eigen::Vector3f pt3d(((float)u - cx) / fx * ptr_pDep[pos],
+                           ((float)v - cy) / fy * ptr_pDep[pos], ptr_pDep[pos]);
+      pt3d = R * pt3d + t;
+
+      if (pt3d[2] > 0.0) {
+        float x = fx * pt3d[0] / pt3d[2] + cx;
+        float y = fy * pt3d[1] / pt3d[2] + cy;
+
+        float color_warped = interpolate(ptr_cImg, x, y, w, h);
+        if (!std::isnan(color_warped)) {
+          ptr_err[pos] = abs(color_warped - ptr_pImg[pos]) * 255.0;
+        }
+      }
     }
   }
-
-  output_ptr = (float *)grad_y.data;
-  for (int x = 0; x < w; ++x) {
-    output_ptr[x] = input_ptr[w + x] - input_ptr[x];
-    output_ptr[(h - 1) * w + x] = input_ptr[(h - 1) * w + x] - input_ptr[(h - 2) * w + x];
-
-    for (int y = 1; y < h - 1; ++y) {
-      float v0 = input_ptr[(y - 1) * w + x];
-      float v1 = input_ptr[(y + 1) * w + x];
-      output_ptr[y * w + x] = (v1 - v0) / 2;
-    }
-  }
+  cv::imwrite(std::to_string(itr) + '_' + std::to_string(level) + ".png", err);
+  itr += 1;
 }
 
 void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
@@ -255,6 +314,8 @@ void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
   Eigen::Vector4f intr_level = intr_Pyramid[level];
   cv::Mat cImg_level = cImg_Pyramid[level];
   cv::Mat pDep_level = pDep_Pyramid[level];
+  cv::Mat gradx_level = gradx_Pyramid[level];
+  cv::Mat grady_level = grady_Pyramid[level];
 
   // Camera intrinsics
   float fx = intr_level(0);
@@ -266,11 +327,8 @@ void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
   int w = cImg_level.cols;
   int h = cImg_level.rows;
 
-  cv::Mat grad_x(h, w, CV_32FC1), grad_y(h, w, CV_32FC1);
-  calcGradient(cImg_level, grad_x, grad_y);
-
-  float *ptr_gradx = (float *)grad_x.data;
-  float *ptr_grady = (float *)grad_y.data;
+  float *ptr_gradx = (float *)gradx_level.data;
+  float *ptr_grady = (float *)grady_level.data;
   float *ptr_pDep = (float *)pDep_level.data;
 
   // RationMatrix and t
@@ -292,22 +350,23 @@ void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
       float X = pt3d[0];
       float Y = pt3d[1];
       float Z = pt3d[2];
-      Jw << fx / Z, 0, -fx * X / (Z * Z), -fx * (X * Y) / (Z * Z),
-          fx * (1 + (X * X) / (Z * Z)), -fx * Y / Z, 0, fy / Z,
-          -fy * Y / (Z * Z), -fy * (1 + (Y * Y) / (Z * Z)),
-          fy * X * Y / (Z * Z), fy * X / Z;
 
-      if (Z > 0.0) {
-        // project 3f point to 2d
-        Eigen::Vector2f pt2d(fx * X / Z + cx, fy * Y / Z + cy);
-        JI(0, 0) = interpolate(ptr_gradx, pt2d[0], pt2d[1], w, h);
-        JI(0, 1) = interpolate(ptr_grady, pt2d[0], pt2d[1], w, h);
+      if (Z < 1e-9)
+        continue;
+
+      float x = fx * X / Z + cx;
+      float y = fy * Y / Z + cy;
+
+      if (0 <= x && x < w && 0 <= y && y < h) {
+        Jw << fx / Z, 0, -fx * X / (Z * Z), -fx * (X * Y) / (Z * Z),
+            fx * (1 + (X * X) / (Z * Z)), -fx * Y / Z, 0, fy / Z,
+            -fy * Y / (Z * Z), -fy * (1 + (Y * Y) / (Z * Z)),
+            fy * X * Y / (Z * Z), fy * X / Z;
+
+        JI(0, 0) = interpolate(ptr_gradx, x, y, w, h);
+        JI(0, 1) = interpolate(ptr_grady, x, y, w, h);
+        J.row(pos) = JI * Jw;
       }
-
-      J.row(pos) = JI * Jw;
-
-      if (!std::isfinite(J.row(pos)[0]))
-        J.row(pos).setZero();
     }
   }
 }
@@ -317,19 +376,31 @@ Sophus::SE3f DirectOdometry::optimize() {
   makePyramid();
 
   Sophus::SE3f xi(Eigen::Matrix4f::Identity());
-  Eigen::VectorXf inc(6); // step increments.
+  Eigen::VectorXf xi_inc(6);
   Eigen::VectorXf residuals, weights;
   Eigen::MatrixXf J;
 
   for (int level = NUM_PYRAMID - 1; level >= 0; --level) {
     float error_prev = std::numeric_limits<float>::max();
-    for (int itr = 0; itr < NUM_GNITERS; itr++) {
+    for (int itr = 0; itr < NUM_GNITERS; ++itr) {
 
       // compute residuals
       calcResiduals(xi, level, residuals);
+      showError(xi, level);
 
-      float error = residuals.transpose() * residuals;
+      float error = (float)(residuals.transpose() * residuals) /
+                    (cImg_Pyramid[level].rows * cImg_Pyramid[level].cols);
+      // break when convergence and (possibly) cancel last increment
+      
+      if (error > error_prev)
+      {
+        xi = Sophus::SE3f::exp(xi_inc).inverse() * xi;
+        break;
+      }
       std::cout << level << ": " << error << std::endl;
+      if (error / error_prev > 0.997)
+        break;
+      error_prev = error;
 
       // r = W * r
       weighting(residuals, weights);
@@ -339,20 +410,13 @@ Sophus::SE3f DirectOdometry::optimize() {
       Eigen::MatrixXf Jt = J.transpose();
 
       // J = W * J
-      for (int i = 0; i < Jt.rows(); ++i)
+      for (int i = 0; i < J.rows(); ++i)
         J.row(i) = weights[i] * J.row(i);
 
-      // Jt * (W * J) * inc_xi = - Jt * (W * r)
-      inc = (Jt * J).ldlt().solve(-Jt * residuals);
-      // std::cout << inc.transpose() << std::endl;
+      // Jt * (W * J) * xi_inc = - Jt * (W * r)
+      xi_inc = (Jt * J).ldlt().solve(-Jt * residuals);
 
-      xi = xi * Sophus::SE3f::exp(inc);
-
-      // Break when convergence.
-      if (error / error_prev > 0.997)
-        break;
-
-      error_prev = error;
+      xi = Sophus::SE3f::exp(xi_inc) * xi;
     }
   }
 

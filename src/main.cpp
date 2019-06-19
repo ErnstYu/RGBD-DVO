@@ -45,25 +45,23 @@ int main() {
     return -1;
   }
 
-  size_t NUM_IMG = inputRGBPaths.size() < inputDepPaths.size()
-                       ? inputRGBPaths.size()
-                       : inputDepPaths.size();
+  size_t NUM_IMG = std::min(inputRGBPaths.size(), inputDepPaths.size());
   cv::Mat pImg, pDep, cImg, cDep;
 
   pImg = cv::imread(inputRGBPaths[0], cv::IMREAD_GRAYSCALE);
-  pDep = cv::imread(inputDepPaths[0], cv::IMREAD_GRAYSCALE);
+  pDep = cv::imread(inputDepPaths[0], cv::IMREAD_ANYDEPTH);
 
   for (size_t i = 1; i < NUM_IMG - 1; ++i) {
-
     cImg = cv::imread(inputRGBPaths[i], cv::IMREAD_GRAYSCALE);
-    cDep = cv::imread(inputDepPaths[i], cv::IMREAD_GRAYSCALE);
+    cDep = cv::imread(inputDepPaths[i], cv::IMREAD_ANYDEPTH);
 
     DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
     tforms.push_back(dvo.optimize());
-    
-    std::cout << tforms[i - 1].translation().transpose() * FACTOR << ' ';
+
+    std::cout << tforms[i - 1].translation().transpose() << ' ';
     Eigen::Quaternionf quat(tforms[i - 1].rotationMatrix());
-    std::cout << quat.x() << ' ' << quat.y() << ' ' << quat.z() << ' ' << quat.w() << std::endl;
+    std::cout << quat.x() << ' ' << quat.y() << ' ' << quat.z() << ' '
+              << quat.w() << std::endl;
 
     pImg = cImg.clone();
     pDep = cDep.clone();
