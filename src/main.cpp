@@ -33,6 +33,21 @@ bool loadFilePaths(const std::string dataset, const std::string filename,
   return true;
 }
 
+void savePoses(const std::vector<Sophus::SE3f> &tforms)
+{
+  Sophus::SE3f pose(Eigen::Matrix4f::Identity());
+  std::ofstream fout("poses.txt");
+  for (size_t i = 0; i < tforms.size(); ++i)
+  {
+    pose = tforms[i] * pose;
+    fout << pose.translation().transpose() << '\t';
+    Eigen::Quaternionf quat(pose.unit_quaternion());
+    fout << quat.x() << '\t' << quat.y() << '\t' << quat.z() << '\t'
+              << quat.w() << std::endl;
+  }
+  fout.close();
+}
+
 int main() {
   std::vector<std::string> inputRGBPaths, inputDepPaths;
 
@@ -52,20 +67,20 @@ int main() {
   pDep = cv::imread(inputDepPaths[0], cv::IMREAD_ANYDEPTH);
 
   for (size_t i = 1; i < NUM_IMG - 1; ++i) {
-    cImg = cv::imread(inputRGBPaths[i], cv::IMREAD_GRAYSCALE);
-    cDep = cv::imread(inputDepPaths[i], cv::IMREAD_ANYDEPTH);
+    cImg = cv::imread(inputRGBPaths[i], cv::IMREAD_GRAYSCALE);  // 8 bit rgb
+    cDep = cv::imread(inputDepPaths[i], cv::IMREAD_ANYDEPTH);   // 16 bit depth
 
     DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
     tforms.push_back(dvo.optimize());
 
     std::cout << tforms[i - 1].translation().transpose() << ' ';
-    Eigen::Quaternionf quat(tforms[i - 1].rotationMatrix());
+    Eigen::Quaternionf quat(tforms[i - 1].unit_quaternion());
     std::cout << quat.x() << ' ' << quat.y() << ' ' << quat.z() << ' '
               << quat.w() << std::endl;
 
     pImg = cImg.clone();
     pDep = cDep.clone();
   }
-
+  savePoses(tforms);
   return 0;
 }
