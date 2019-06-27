@@ -37,9 +37,11 @@ if(OpenCV_VERSION VERSION_LESS 3)
   set_property(TARGET OpenCV PROPERTY INTERFACE_COMPILE_DEFINITIONS DBATK_OPENCV2)
 endif()
 
+add_library(utils src/utils.cpp)
+
 add_library(directOdometry src/directOdometry.cpp)
-target_link_libraries(directOdometry ${OpenCV_LIBS})
+target_link_libraries(directOdometry utils ${OpenCV_LIBS})
 
 add_executable(main src/main.cpp)
-target_link_libraries(main directOdometry ${OpenCV_LIBS})
+target_link_libraries(main utils directOdometry ${OpenCV_LIBS})
 

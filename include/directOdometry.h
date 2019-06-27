@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
 #include <sophus/se3.hpp>
+#include <utils.h>
 
 class DirectOdometry {
 private:
