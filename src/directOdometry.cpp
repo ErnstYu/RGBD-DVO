@@ -351,8 +351,7 @@ Sophus::SE3f DirectOdometry::optimize() {
                     (cImg_Pyramid[level].rows * cImg_Pyramid[level].cols);
 
       // break at convergence and (possibly) reject last increment
-      if (error > error_prev)
-      {
+      if (error > error_prev) {
         xi = Sophus::SE3f::exp(xi_inc).inverse() * xi;
         break;
       }
