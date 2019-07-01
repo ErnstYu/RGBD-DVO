@@ -88,7 +88,7 @@ def associate(first_list, second_list):
                          if abs(a - b) < 0.02]
     potential_matches.sort()
     matches = []
-    for diff, a, b in potential_matches:
+    for a, b in potential_matches:
         if a in first_keys and b in second_keys:
             first_keys.remove(a)
             second_keys.remove(b)
