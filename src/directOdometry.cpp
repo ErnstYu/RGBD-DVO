@@ -1,5 +1,45 @@
 #include <directOdometry.h>
 
+float interpolate(const float *img_ptr, float x, float y, int w, int h) {
+  float val = nan("1");
+  int x0 = floor(x), y0 = floor(y);
+  int x1 = x0 + 1, y1 = y0 + 1;
+
+  float x1_weight = x - x0, y1_weight = y - y0;
+  float x0_weight = 1 - x1_weight, y0_weight = 1 - y1_weight;
+
+  // Check if warped points are in the image.
+  if (x0 < 0 or x0 >= w)
+    x0_weight = 0;
+  if (x1 < 0 or x1 >= w)
+    x1_weight = 0;
+  if (y0 < 0 or y0 >= h)
+    y0_weight = 0;
+  if (y1 < 0 or y1 >= h)
+    y1_weight = 0;
+  float w00 = x0_weight * y0_weight;
+  float w10 = x1_weight * y0_weight;
+  float w01 = x0_weight * y1_weight;
+  float w11 = x1_weight * y1_weight;
+
+  // Compute interpolated pixel intensity.
+  float sumWeights = w00 + w10 + w01 + w11;
+  float total = 0;
+  if (w00 > 0)
+    total += img_ptr[y0 * w + x0] * w00;
+  if (w01 > 0)
+    total += img_ptr[y1 * w + x0] * w01;
+  if (w10 > 0)
+    total += img_ptr[y0 * w + x1] * w10;
+  if (w11 > 0)
+    total += img_ptr[y1 * w + x1] * w11;
+
+  if (sumWeights > 0)
+    val = total / sumWeights;
+
+  return val;
+}
+
 cv::Mat downsampleImg(const cv::Mat &img) {
 
   int w = img.cols, h = img.rows;
@@ -218,8 +258,7 @@ void DirectOdometry::weighting(const Eigen::VectorXf &residuals,
   }
 }
 
-void DirectOdometry::showError(const Sophus::SE3f &xi, const int level) {
-  static int itr = 0;
+void DirectOdometry::calcFinalRes(const Sophus::SE3f &xi) {
   Eigen::Vector4f intr_level = intr_Pyramid[0];
   cv::Mat cImg_level = cImg_Pyramid[0];
   cv::Mat pImg_level = pImg_Pyramid[0];
@@ -241,8 +280,8 @@ void DirectOdometry::showError(const Sophus::SE3f &xi, const int level) {
   float *ptr_pDep = (float *)pDep_level.data;
   float *ptr_cImg = (float *)cImg_level.data;
 
-  cv::Mat err = cv::Mat::zeros(h, w, CV_32FC1);
-  float *ptr_err = (float *)err.data;
+  finalResidual = cv::Mat::zeros(h, w, CV_32FC1);
+  float *ptr_err = (float *)finalResidual.data;
 
   for (int v = 0; v < h; ++v) {
     for (int u = 0; u < w; ++u) {
@@ -263,8 +302,6 @@ void DirectOdometry::showError(const Sophus::SE3f &xi, const int level) {
       }
     }
   }
-  cv::imwrite(std::to_string(itr) + '_' + std::to_string(level) + ".png", err);
-  itr += 1;
 }
 
 void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
@@ -345,7 +382,6 @@ Sophus::SE3f DirectOdometry::optimize() {
 
       // compute residuals
       calcResiduals(xi, level, residuals);
-      showError(xi, level);
 
       float error = (float)(residuals.transpose() * residuals) /
                     (cImg_Pyramid[level].rows * cImg_Pyramid[level].cols);
@@ -355,7 +391,6 @@ Sophus::SE3f DirectOdometry::optimize() {
         xi = Sophus::SE3f::exp(xi_inc).inverse() * xi;
         break;
       }
-      std::cout << level << ": " << error << std::endl;
       if (error / error_prev > 0.997)
         break;
       error_prev = error;
@@ -377,6 +412,7 @@ Sophus::SE3f DirectOdometry::optimize() {
       xi = Sophus::SE3f::exp(xi_inc) * xi;
     }
   }
+  calcFinalRes(xi);
 
   return xi;
 }

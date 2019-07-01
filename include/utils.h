@@ -7,17 +7,18 @@
 #include <sstream>
 #include <vector>
 
-bool loadFilePaths(const std::string dataset, const std::string filename,
-                   std::vector<std::string> &paths);
+bool loadFilePaths(const std::string dataset,
+                   std::vector<std::string> &rgbPaths,
+                   std::vector<std::string> &depPaths);
 
-bool getPose(const std::string line, Sophus::SE3f &pose);
+bool poseFromStr(const std::string line, Sophus::SE3f &pose);
 
 bool loadGroundTruth(const std::string dataset, const std::string filename,
                      std::vector<Sophus::SE3f> &poses);
 
-void savePoses(const std::vector<Sophus::SE3f> &tforms,
-               std::vector<Sophus::SE3f> &poses);
+void absPoses(const std::vector<Sophus::SE3f> &tforms,
+              std::vector<Sophus::SE3f> &poses);
 
-float interpolate(const float *img_ptr, float x, float y, int w, int h);
+void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string fn);
 
 #endif // UTILS_H

@@ -6,7 +6,6 @@
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
 #include <sophus/se3.hpp>
-#include <utils.h>
 
 class DirectOdometry {
 private:
@@ -40,7 +39,7 @@ private:
   void calcResiduals(const Sophus::SE3f &xi, const int level,
                      Eigen::VectorXf &residuals);
 
-  void showError(const Sophus::SE3f &xi, const int level);
+  void calcFinalRes(const Sophus::SE3f &xi);
 
   void calcJacobian(const Sophus::SE3f &xi, const int level,
                     Eigen::MatrixXf &J);
@@ -48,6 +47,8 @@ private:
   void weighting(const Eigen::VectorXf &residuals, Eigen::VectorXf &weights);
 
 public:
+  cv::Mat finalResidual;
+
   DirectOdometry(const cv::Mat &pImg, const cv::Mat &pDep, const cv::Mat &cImg,
                  const Eigen::Vector4f &intr, const float FACTOR) {
 

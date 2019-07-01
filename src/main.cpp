@@ -4,25 +4,19 @@
 #include <sophus/se3.hpp>
 #include <utils.h>
 
-const std::string DATASET = "../data/test";
+const std::string DATASET = "../data/fr1_desk";
 const Eigen::Vector4f INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
 const float FACTOR = 5000.0;
 
-std::vector<Sophus::SE3f> tforms;
+std::vector<Sophus::SE3f> tforms, gt_tforms;
 
 int main() {
   std::vector<std::string> inputRGBPaths, inputDepPaths;
 
-  if (!loadFilePaths(DATASET, "rgb.txt", inputRGBPaths)) {
-    std::cerr << "Cannot open " + DATASET + "/rgb.txt!\n";
-    return -1;
-  }
-  if (!loadFilePaths(DATASET, "depth.txt", inputDepPaths)) {
-    std::cerr << "Cannot open " + DATASET + "/depth.txt!\n";
-    return -1;
-  }
+  if (!loadFilePaths(DATASET, inputRGBPaths, inputDepPaths))
+    exit(-1);
 
-  size_t NUM_IMG = std::min(inputRGBPaths.size(), inputDepPaths.size());
+  size_t NUM_IMG = inputRGBPaths.size();
   cv::Mat pImg, pDep, cImg, cDep;
 
   pImg = cv::imread(inputRGBPaths[0], cv::IMREAD_GRAYSCALE);
@@ -37,9 +31,14 @@ int main() {
 
     pImg = cImg.clone();
     pDep = cDep.clone();
+    std::cout << i << std::endl;
   }
 
   std::vector<Sophus::SE3f> poses, gt_poses;
-  savePoses(tforms, poses);
+  absPoses(tforms, poses);
+  savePoses(poses, "poses.txt");
+
+  loadGroundTruth(DATASET, "groundtruth.txt", gt_poses);
+
   return 0;
 }

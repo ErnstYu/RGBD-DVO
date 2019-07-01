@@ -12,9 +12,10 @@ Dataset: https://vision.in.tum.de/data/datasets/rgbd-dataset/download
 - Robust-norm to handle outliers
 
 ## Dependencies
-- Eigen (3.3.7 used)
-- Sophus (1.0.0 used)
-- OpenCV (4.1.0 used)
+- Eigen (3.3.7 tested)
+- Sophus (1.0.0 tested)
+- Pangolin (0.5 tested)
+- OpenCV (4.1.0 tested)
 
 ## References
 - Robust Odometry Estimation for RGB-D Cameras (C. Kerl, J. Sturm and D. Cremers), In International Conference on Robotics and Automation (ICRA), 2013.

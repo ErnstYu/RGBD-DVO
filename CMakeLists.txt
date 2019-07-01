@@ -27,15 +27,20 @@ SET(CMAKE_CXX_FLAGS " -ftemplate-backtrace-limit=0 -Wall ${EXTRA_WARNING_FLAGS} 
 
 include_directories(include)
 
-# NOTE: not specifying version, since 2, 3 or 4 is fine
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+message(STATUS "Found Eigen ${Eigen3_VERSION} headers in: ${EIGEN3_INCLUDE_DIR}")
+
+find_package(Sophus REQUIRED)
+include_directories(${Sophus_INCLUDE_DIR})
+message(STATUS "Found Sophus ${Sophus_VERSION} headers in: ${Sophus_INCLUDE_DIR}")
+
+find_package(Pangolin REQUIRED)
+include_directories(${Pangolin_INCLUDE_DIR})
+message(STATUS "Found Pangolin ${Pangolin_VERSION} headers in: ${Pangolin_INCLUDE_DIR}")
+
 find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui imgcodecs)
-message(STATUS "Found OpenCV ${OpenCV_VERSION} headers in: ${OpenCV_INCLUDE_DIRS}")
-add_library(OpenCV INTERFACE IMPORTED)
-set_property(TARGET OpenCV PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${OpenCV_INCLUDE_DIRS})
-set_property(TARGET OpenCV PROPERTY INTERFACE_LINK_LIBRARIES ${OpenCV_LIBS})
-if(OpenCV_VERSION VERSION_LESS 3)
-  set_property(TARGET OpenCV PROPERTY INTERFACE_COMPILE_DEFINITIONS DBATK_OPENCV2)
-endif()
+message(STATUS "Found OpenCV ${OpenCV_VERSION} headers in: ${OpenCV_INCLUDE_DIR}")
 
 add_library(utils src/utils.cpp)
 
@@ -43,5 +48,5 @@ add_library(directOdometry src/directOdometry.cpp)
 target_link_libraries(directOdometry utils ${OpenCV_LIBS})
 
 add_executable(main src/main.cpp)
-target_link_libraries(main utils directOdometry ${OpenCV_LIBS})
+target_link_libraries(main utils directOdometry ${OpenCV_LIBS} ${Pangolin_LIBS})
 
