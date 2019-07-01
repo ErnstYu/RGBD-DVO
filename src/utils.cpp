@@ -1,6 +1,6 @@
 #include <utils.h>
 
-bool loadFilePaths(const std::string dataset,
+bool loadFilePaths(const std::string &dataset,
                    std::vector<std::string> &rgbPaths,
                    std::vector<std::string> &depPaths) {
   rgbPaths.clear();
@@ -15,6 +15,8 @@ bool loadFilePaths(const std::string dataset,
   std::string line;
   while (!fin.eof()) {
     std::getline(fin, line);
+    if (line.size() <= 10)
+      continue;
 
     std::stringstream ss(line);
     std::string buf;
@@ -29,7 +31,7 @@ bool loadFilePaths(const std::string dataset,
   return true;
 }
 
-bool poseFromStr(const std::string line, Sophus::SE3f &pose) {
+bool poseFromStr(const std::string &line, Sophus::SE3f &pose) {
   if (line[0] == '#')
     return false;
 
@@ -46,7 +48,7 @@ bool poseFromStr(const std::string line, Sophus::SE3f &pose) {
   return true;
 }
 
-bool loadGroundTruth(const std::string dataset, const std::string filename,
+bool loadGroundTruth(const std::string &dataset, const std::string &filename,
                      std::vector<Sophus::SE3f> &poses) {
   poses.clear();
 
@@ -76,20 +78,7 @@ bool loadGroundTruth(const std::string dataset, const std::string filename,
   return true;
 }
 
-void absPoses(const std::vector<Sophus::SE3f> &tforms,
-              std::vector<Sophus::SE3f> &poses) {
-
-  poses.clear();
-  Sophus::SE3f pose(Eigen::Matrix4f::Identity());
-  poses.push_back(pose);
-
-  for (size_t i = 0; i < tforms.size(); ++i) {
-    pose = tforms[i] * pose;
-    poses.push_back(pose);
-  }
-}
-
-void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string fn) {
+void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string &fn) {
 
   std::ofstream fout(fn.c_str());
   for (size_t i = 0; i < poses.size(); ++i) {
@@ -99,4 +88,35 @@ void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string fn) {
          << quat.w() << std::endl;
   }
   fout.close();
+}
+
+void renderCam(const Sophus::SE3f &xi, float lineWidth, const u_int8_t *color,
+               float sizeFactor) {
+  glPushMatrix();
+  glMultMatrixd(xi.cast<double>().matrix().data());
+  glColor3ubv(color);
+  glLineWidth(lineWidth);
+  glBegin(GL_LINES);
+  glVertex3f(0, 0, 0);
+  const float sz = sizeFactor;
+  const float width = 640, height = 480, fx = 500, fy = 500, cx = 320,
+              cy = 240; // choose an arbitrary intrinsics because we don't need
+                        // the camera be exactly same as the original one
+  glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glVertex3f(0, 0, 0);
+  glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(0, 0, 0);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(0, 0, 0);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+  glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+  glEnd();
+  glPopMatrix();
 }

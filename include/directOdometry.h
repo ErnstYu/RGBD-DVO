@@ -36,13 +36,12 @@ private:
 
   void calcGradient(const cv::Mat &img, cv::Mat &grad_x, cv::Mat &grad_y);
 
-  void calcResiduals(const Sophus::SE3f &xi, const int level,
+  void calcResiduals(const Sophus::SE3f &xi, int level,
                      Eigen::VectorXf &residuals);
 
   void calcFinalRes(const Sophus::SE3f &xi);
 
-  void calcJacobian(const Sophus::SE3f &xi, const int level,
-                    Eigen::MatrixXf &J);
+  void calcJacobian(const Sophus::SE3f &xi, int level, Eigen::MatrixXf &J);
 
   void weighting(const Eigen::VectorXf &residuals, Eigen::VectorXf &weights);
 
@@ -50,7 +49,7 @@ public:
   cv::Mat finalResidual;
 
   DirectOdometry(const cv::Mat &pImg, const cv::Mat &pDep, const cv::Mat &cImg,
-                 const Eigen::Vector4f &intr, const float FACTOR) {
+                 const Eigen::Vector4f &intr, float FACTOR) {
 
     pImg.convertTo(this->pImg, CV_32FC1, 1.0 / 255.0);
     cImg.convertTo(this->cImg, CV_32FC1, 1.0 / 255.0);
