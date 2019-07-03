@@ -8,8 +8,8 @@
 #include <sstream>
 #include <vector>
 
-const u_int8_t COLOR_GT[3]{0, 250, 0};         // green
-const u_int8_t COLOR_VO[3]{0, 0, 250};         // blue
+const u_int8_t COLOR_GT[3]{0, 250, 0}; // green
+const u_int8_t COLOR_VO[3]{0, 0, 250}; // blue
 
 bool loadFilePaths(const std::string &dataset,
                    std::vector<std::string> &rgbPaths,
