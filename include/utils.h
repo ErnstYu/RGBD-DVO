@@ -17,7 +17,7 @@ bool loadFilePaths(const std::string &dataset,
 
 bool poseFromStr(const std::string &line, Sophus::SE3f &pose);
 
-bool loadGroundTruth(const std::string &dataset, const std::string &filename,
+bool loadGroundTruth(const std::string &dataset,
                      std::vector<Sophus::SE3f> &poses);
 
 void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string &fn);

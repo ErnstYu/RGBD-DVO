@@ -57,7 +57,7 @@ bool nextFrame() {
 
 int main(int argc, char **argv) {
   bool show_gui = true;
-  std::string dataset = "../data/fr1_desk";
+  std::string dataset = "test";
 
   CLI::App app{"Direct Visual Odometry"};
   app.add_option("--show-gui", show_gui, "Show GUI");
@@ -70,10 +70,15 @@ int main(int argc, char **argv) {
     return app.exit(e);
   }
 
-  if (!loadGroundTruth(dataset, "groundtruth.txt", gt_poses))
+  if (!loadFilePaths("../data/" + dataset, inputRGBPaths, inputDepPaths)) {
+    std::cerr << "Cannot load dataset!\n";
     exit(-1);
-  if (!loadFilePaths(dataset, inputRGBPaths, inputDepPaths))
+  }
+
+  if (!loadGroundTruth("../data/" + dataset, gt_poses)) {
+    std::cerr << "Cannot load ground truth!\n";
     exit(-1);
+  }
 
   if (show_gui) {
     pangolin::CreateWindowAndBind("Direct Visual Odometry", 1500, 1000);

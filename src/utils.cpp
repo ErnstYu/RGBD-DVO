@@ -48,11 +48,11 @@ bool poseFromStr(const std::string &line, Sophus::SE3f &pose) {
   return true;
 }
 
-bool loadGroundTruth(const std::string &dataset, const std::string &filename,
+bool loadGroundTruth(const std::string &dataset,
                      std::vector<Sophus::SE3f> &poses) {
   poses.clear();
 
-  std::ifstream fin((dataset + '/' + filename).c_str());
+  std::ifstream fin((dataset + "/groundtruth.txt").c_str());
   if (!fin.is_open())
     return false;
 
