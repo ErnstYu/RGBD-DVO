@@ -30,14 +30,13 @@ const Eigen::Vector4f INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
 const float FACTOR = 5000.0;
 
 std::vector<std::string> inputRGBPaths, inputDepPaths;
-std::vector<Sophus::SE3f> gt_poses;
-Sophus::SE3f pose;
+std::vector<Sophus::SE3f> gt_poses, poses;
 cv::Mat stepRes = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
 
-size_t idx = 1;
+size_t num_img, idx = 1;
 
 bool nextFrame() {
-  if (idx >= inputRGBPaths.size())
+  if (idx >= num_img)
     return false;
 
   cv::Mat pImg, pDep, cImg, cDep;
@@ -46,8 +45,9 @@ bool nextFrame() {
   cImg = cv::imread(inputRGBPaths[idx], cv::IMREAD_GRAYSCALE);
 
   DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
-  Sophus::SE3f tform = dvo.optimize();
-  pose = tform * pose;
+  Sophus::SE3f T_c_p = dvo.optimize();
+  Sophus::SE3f pose = poses.back() * T_c_p.inverse();
+  poses.push_back(pose);
   dvo.finalResidual.convertTo(stepRes, CV_16UC1, 255.0);
 
   std::cout << idx << std::endl;
@@ -74,11 +74,12 @@ int main(int argc, char **argv) {
     std::cerr << "Cannot load dataset!\n";
     exit(-1);
   }
-
   if (!loadGroundTruth("../data/" + dataset, gt_poses)) {
     std::cerr << "Cannot load ground truth!\n";
     exit(-1);
   }
+  poses.push_back(Sophus::SE3f(Eigen::Matrix4f::Identity()));
+  num_img = inputRGBPaths.size();
 
   if (show_gui) {
     pangolin::CreateWindowAndBind("Direct Visual Odometry", 1500, 1000);
@@ -110,7 +111,7 @@ int main(int argc, char **argv) {
 
     // 3D visualization (initial camera view optimized to see full map)
     pangolin::OpenGlRenderState camera(
-        pangolin::ProjectionMatrix(640, 480, 400, 400, 320, 240, 0.01, 1000),
+        pangolin::ProjectionMatrix(640, 480, 400, 400, 320, 240, 0.1, 100),
         pangolin::ModelViewLookAt(-3.4, -3.7, -8.3, 2.1, 0.6, 0.2,
                                   pangolin::AxisNegY));
 
@@ -138,7 +139,11 @@ int main(int argc, char **argv) {
              stepRes.total() * stepRes.elemSize());
       img_view[1]->SetImage(res);
 
-      renderCam(pose, 2.0, COLOR_VO, 0.1);
+      for (auto tmp : poses)
+        renderCam(tmp, 1.0, COLOR_VO, 1e-2);
+      for (size_t j = 0; j < num_img; ++j)
+        renderCam(gt_poses[j], 1.0, COLOR_GT, 1e-2);
+      pangolin::glDrawAxis(1);
 
       if (continue_next) {
         // stop if there is nothing left to do

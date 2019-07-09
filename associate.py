@@ -88,7 +88,7 @@ def associate(first_list, second_list):
                          if abs(a - b) < 0.02]
     potential_matches.sort()
     matches = []
-    for a, b in potential_matches:
+    for t, a, b in potential_matches:
         if a in first_keys and b in second_keys:
             first_keys.remove(a)
             second_keys.remove(b)
@@ -99,13 +99,19 @@ def associate(first_list, second_list):
 
 if __name__ == '__main__':
     
-    first_list = read_file_list("rgb.txt")
-    second_list = read_file_list("depth.txt")
+    rgb_list = read_file_list("rgb.txt")
+    dep_list = read_file_list("depth.txt")
+    gt_list  = read_file_list("groundtruth.txt")
 
-    matches = associate(first_list, second_list)    
+    new_rgb  = {}
 
+    matches = associate(rgb_list, dep_list)
     file = open("assoc.txt", mode = "w")
     for a,b in matches:
-        file.write("%f %s %f %s\n"%(a," ".join(first_list[a]),b," ".join(second_list[b])))
-            
-        
+        new_rgb[a] = rgb_list[a]
+        file.write("%f %s %f %s\n"%(a," ".join(rgb_list[a]),b," ".join(dep_list[b])))
+    
+    matches = associate(new_rgb, gt_list)
+    file = open("aligned_gt.txt", mode = "w")
+    for a,b in matches:
+        file.write("%f %s\n"%(b," ".join(gt_list[b])))

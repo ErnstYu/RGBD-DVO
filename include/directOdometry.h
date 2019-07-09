@@ -16,6 +16,7 @@ private:
   // Image and camera matrix.
   cv::Mat pImg, pDep, cImg;
   Eigen::Vector4f intr;
+  int W, H;
 
   // Image and camera matrix pyramids.
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> pImg_Pyramid;
@@ -41,6 +42,8 @@ private:
 
   void calcFinalRes(const Sophus::SE3f &xi);
 
+  void showError(const Sophus::SE3f &xi, int level);
+
   void calcJacobian(const Sophus::SE3f &xi, int level, Eigen::MatrixXf &J);
 
   void weighting(const Eigen::VectorXf &residuals, Eigen::VectorXf &weights);
@@ -55,6 +58,9 @@ public:
     cImg.convertTo(this->cImg, CV_32FC1, 1.0 / 255.0);
     pDep.convertTo(this->pDep, CV_32FC1, 1.0 / FACTOR);
     this->intr = intr;
+    W = pImg.cols;
+    H = pImg.rows;
+    finalResidual = cv::Mat::zeros(H, W, CV_32FC1);
   }
 
   Sophus::SE3f optimize();

@@ -52,17 +52,17 @@ bool loadGroundTruth(const std::string &dataset,
                      std::vector<Sophus::SE3f> &poses) {
   poses.clear();
 
-  std::ifstream fin((dataset + "/groundtruth.txt").c_str());
+  std::ifstream fin((dataset + "/aligned_gt.txt").c_str());
   if (!fin.is_open())
     return false;
 
-  Sophus::SE3f pose, first_pose;
+  Sophus::SE3f pose, T_0_w;
   std::string line;
+  poses.push_back(Sophus::SE3f(Eigen::Matrix4f::Identity()));
 
   do {
     std::getline(fin, line);
-  } while (!poseFromStr(line, first_pose));
-  poses.push_back(Sophus::SE3f(Eigen::Matrix4f::Identity()));
+  } while (!poseFromStr(line, T_0_w));
 
   while (!fin.eof()) {
     do {
@@ -72,7 +72,7 @@ bool loadGroundTruth(const std::string &dataset,
     if (fin.eof())
       break;
 
-    poses.push_back(first_pose.inverse() * pose);
+    poses.push_back(T_0_w.inverse() * pose);
   }
   fin.close();
   return true;

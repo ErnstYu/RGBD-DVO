@@ -108,17 +108,30 @@ cv::Mat downsampleDepth(const cv::Mat &depth) {
   return depth_ds;
 }
 
+float calcError(Eigen::VectorXf &residuals) {
+  float num = 0.0, err = 0.0;
+
+  for (int i = 0; i < residuals.size(); ++i)
+    if (!std::isnan(residuals(i))) {
+      err += residuals(i) * residuals(i);
+      num += 1.0;
+    }
+  err = err / num;
+  return err;
+}
+
 void DirectOdometry::calcGradient(const cv::Mat &img, cv::Mat &grad_x,
                                   cv::Mat &grad_y) {
 
+  float *input_ptr = (float *)img.data;
+
   int w = img.cols;
   int h = img.rows;
-  float *input_ptr = (float *)img.data;
 
   grad_x = cv::Mat::zeros(h, w, CV_32FC1);
   float *output_ptr = (float *)grad_x.data;
   for (int y = 0; y < h; ++y) {
-    output_ptr[y * w] = input_ptr[y * w + 1] - input_ptr[y * w];
+    output_ptr[y * h] = input_ptr[y * w + 1] - input_ptr[y * w];
     output_ptr[y * w + w - 1] =
         input_ptr[y * w + w - 1] - input_ptr[y * w + w - 2];
 
@@ -205,17 +218,19 @@ void DirectOdometry::calcResiduals(const Sophus::SE3f &xi, const int level,
   float *ptr_pDep = (float *)pDep_level.data;
   float *ptr_cImg = (float *)cImg_level.data;
 
-  residuals = Eigen::VectorXf::Zero(w * h);
+  residuals = Eigen::VectorXf::Ones(w * h) * nan("2");
 
   for (int v = 0; v < h; ++v)
     for (int u = 0; u < w; ++u) {
       int pos = v * w + u;
+      if (ptr_pDep[pos] < 1e-6)
+        continue;
 
       Eigen::Vector3f pt3d(((float)u - cx) / fx * ptr_pDep[pos],
                            ((float)v - cy) / fy * ptr_pDep[pos], ptr_pDep[pos]);
       pt3d = R * pt3d + t;
 
-      if (pt3d[2] > 0.0) {
+      if (pt3d[2] > 1e-6) {
         float x = fx * pt3d[0] / pt3d[2] + cx;
         float y = fy * pt3d[1] / pt3d[2] + cy;
 
@@ -239,7 +254,7 @@ void DirectOdometry::weighting(const Eigen::VectorXf &residuals,
     for (int i = 0; i < n; ++i) {
       float res = residuals(i);
 
-      if (std::isfinite(res)) {
+      if (!std::isnan(res)) {
         num += 1.0;
         lambda +=
             res * res *
@@ -247,61 +262,47 @@ void DirectOdometry::weighting(const Eigen::VectorXf &residuals,
       }
     }
     lambda = lambda / num;
-  } while (std::abs(lambda - lambda_prev) > 1e-3);
+  } while (std::abs(lambda - lambda_prev) > 1e-6);
 
   for (int i = 0; i < n; ++i) {
     float res = residuals(i);
-    if (res == 0)
-      continue;
-
-    weights(i) = ((DEFAULT_DOF + 1.0) / (DEFAULT_DOF + lambda * res * res));
+    if (!std::isnan(res))
+      weights(i) = ((DEFAULT_DOF + 1.0) / (DEFAULT_DOF + lambda * res * res));
   }
 }
 
 void DirectOdometry::calcFinalRes(const Sophus::SE3f &xi) {
-  Eigen::Vector4f intr_level = intr_Pyramid[0];
-  cv::Mat cImg_level = cImg_Pyramid[0];
-  cv::Mat pImg_level = pImg_Pyramid[0];
-  cv::Mat pDep_level = pDep_Pyramid[0];
+  Eigen::VectorXf res;
+  calcResiduals(xi, 0, res);
 
-  int w = pImg_level.cols;
-  int h = pImg_level.rows;
+  float *ptr_res = (float *)finalResidual.data;
 
-  // camera intrinsics
-  float fx = intr_level(0);
-  float fy = intr_level(1);
-  float cx = intr_level(2);
-  float cy = intr_level(3);
-
-  Eigen::Matrix3f R = xi.rotationMatrix();
-  Eigen::Vector3f t = xi.translation();
-
-  float *ptr_pImg = (float *)pImg_level.data;
-  float *ptr_pDep = (float *)pDep_level.data;
-  float *ptr_cImg = (float *)cImg_level.data;
-
-  finalResidual = cv::Mat::zeros(h, w, CV_32FC1);
-  float *ptr_err = (float *)finalResidual.data;
-
-  for (int v = 0; v < h; ++v) {
-    for (int u = 0; u < w; ++u) {
-      int pos = v * w + u;
-
-      Eigen::Vector3f pt3d(((float)u - cx) / fx * ptr_pDep[pos],
-                           ((float)v - cy) / fy * ptr_pDep[pos], ptr_pDep[pos]);
-      pt3d = R * pt3d + t;
-
-      if (pt3d[2] > 0.0) {
-        float x = fx * pt3d[0] / pt3d[2] + cx;
-        float y = fy * pt3d[1] / pt3d[2] + cy;
-
-        float color_warped = interpolate(ptr_cImg, x, y, w, h);
-        if (!std::isnan(color_warped)) {
-          ptr_err[pos] = abs(color_warped - ptr_pImg[pos]) * 255.0;
-        }
-      }
+  for (int v = 0; v < H; ++v) {
+    for (int u = 0; u < W; ++u) {
+      int pos = v * W + u;
+      if (!std::isnan(res[pos]))
+        ptr_res[pos] = abs(res[pos] * 255.0);
     }
   }
+}
+
+void DirectOdometry::showError(const Sophus::SE3f &xi, const int level) {
+  static int itr = 0;
+  Eigen::VectorXf res;
+  calcResiduals(xi, 0, res);
+
+  cv::Mat err = cv::Mat::zeros(H, W, CV_32FC1);
+  float *ptr_err = (float *)err.data;
+
+  for (int v = 0; v < H; ++v) {
+    for (int u = 0; u < W; ++u) {
+      int pos = v * W + u;
+      if (!std::isnan(res[pos]))
+        ptr_err[pos] = abs(res[pos] * 255.0);
+    }
+  }
+  cv::imwrite(std::to_string(itr) + '_' + std::to_string(level) + ".png", err);
+  itr += 1;
 }
 
 void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
@@ -338,6 +339,8 @@ void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
   for (int v = 0; v < h; ++v) {
     for (int u = 0; u < w; ++u) {
       int pos = v * w + u;
+      if (ptr_pDep[pos] < 1e-6)
+        continue;
 
       Eigen::Vector3f pt3d(((float)u - cx) / fx * ptr_pDep[pos],
                            ((float)v - cy) / fy * ptr_pDep[pos], ptr_pDep[pos]);
@@ -347,7 +350,7 @@ void DirectOdometry::calcJacobian(const Sophus::SE3f &xi, const int level,
       float Y = pt3d[1];
       float Z = pt3d[2];
 
-      if (Z < 1e-9)
+      if (Z < 1e-6)
         continue;
 
       float x = fx * X / Z + cx;
@@ -380,24 +383,28 @@ Sophus::SE3f DirectOdometry::optimize() {
     float error_prev = std::numeric_limits<float>::max();
     for (int itr = 0; itr < NUM_GNITERS; ++itr) {
 
+      // showError(xi, level);
+
       // compute residuals
       calcResiduals(xi, level, residuals);
 
-      float error = (float)(residuals.transpose() * residuals) /
-                    (cImg_Pyramid[level].rows * cImg_Pyramid[level].cols);
+      float error = calcError(residuals);
 
-      // break at convergence and (possibly) reject last increment
+      // // break at convergence and (possibly) reject last increment
       if (error > error_prev) {
         xi = Sophus::SE3f::exp(xi_inc).inverse() * xi;
         break;
       }
       if (error / error_prev > 0.997)
         break;
+      // std::cout << itr << ": " << error << std::endl;
       error_prev = error;
 
       // r = W * r
       weighting(residuals, weights);
-      residuals = residuals.cwiseProduct(weights);
+      // residuals = residuals.cwiseProduct(weights);
+      for (int i = 0; i < residuals.size(); ++i)
+        residuals(i) = isnan(residuals(i)) ? 0 : weights[i] * residuals(i);
 
       calcJacobian(xi, level, J);
       Eigen::MatrixXf Jt = J.transpose();
