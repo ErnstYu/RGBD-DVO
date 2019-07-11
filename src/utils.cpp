@@ -15,7 +15,7 @@ bool loadFilePaths(const std::string &dataset,
   std::string line;
   while (!fin.eof()) {
     std::getline(fin, line);
-    if (line.size() <= 10)
+    if (line[0] == '#' || line.size() <= 10)
       continue;
 
     std::stringstream ss(line);
@@ -32,11 +32,11 @@ bool loadFilePaths(const std::string &dataset,
 }
 
 bool poseFromStr(const std::string &line, Sophus::SE3f &pose) {
-  if (line[0] == '#')
+  if (line[0] == '#' || line.size() <= 10)
     return false;
 
   std::stringstream ss(line);
-  Eigen::VectorXf t(3);
+  Vec3 t;
   float qx, qy, qz, qw;
   ss >> qw;
 
@@ -48,8 +48,7 @@ bool poseFromStr(const std::string &line, Sophus::SE3f &pose) {
   return true;
 }
 
-bool loadGroundTruth(const std::string &dataset,
-                     std::vector<Sophus::SE3f> &poses) {
+bool loadGroundTruth(const std::string &dataset, Poses &poses) {
   poses.clear();
 
   std::ifstream fin((dataset + "/aligned_gt.txt").c_str());
@@ -78,7 +77,7 @@ bool loadGroundTruth(const std::string &dataset,
   return true;
 }
 
-void savePoses(const std::vector<Sophus::SE3f> &poses, const std::string &fn) {
+void savePoses(const Poses &poses, const std::string &fn) {
 
   std::ofstream fout(fn.c_str());
   for (size_t i = 0; i < poses.size(); ++i) {
@@ -119,4 +118,69 @@ void renderCam(const Sophus::SE3f &xi, float lineWidth, const u_int8_t *color,
   glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
   glEnd();
   glPopMatrix();
+}
+
+template <typename Sim3Derived, typename SE3Derived>
+Sophus::SE3<typename Eigen::ScalarBinaryOpTraits<
+    typename Sim3Derived::Scalar, typename SE3Derived::Scalar>::ReturnType>
+operator*(const Sophus::Sim3Base<Sim3Derived>& a,
+          const Sophus::SE3Base<SE3Derived>& b) {
+  return {a.quaternion().normalized() * b.unit_quaternion(),
+          a.rxso3() * b.translation() + a.translation()};
+}
+
+void evaluate(const Poses &gt_poses, Poses &poses) {
+  // 0. Centroids
+  size_t N = gt_poses.size();
+  Mat3X dataPt(3, N), gtPt(3, N);
+  for (size_t i = 0; i < N; ++i) {
+    dataPt.col(i) = poses[i].translation();
+    gtPt.col(i) = gt_poses[i].translation();
+  }
+  const Vec3 dataMean = dataPt.rowwise().mean();
+  const Vec3 gtMean = gtPt.rowwise().mean();
+
+  // center both clouds to 0 centroid
+  Mat3X dataCtr = dataPt.colwise() - dataMean;
+  Mat3X gtCtr = gtPt.colwise() - gtMean;
+
+  // 1. Rotation
+
+  // sum of outer products of columns
+  const Mat3 W = gtCtr * dataCtr.transpose();
+
+  const auto svd = W.jacobiSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+
+  // last entry to ensure we don't get a reflection, only rotations
+  const Mat3 S = Eigen::DiagonalMatrix<float, 3, 3>(
+      1, 1,
+      svd.matrixU().determinant() * svd.matrixV().determinant() < 0 ? -1 : 1);
+
+  const Mat3 R = svd.matrixU() * S * svd.matrixV().transpose();
+
+  const Mat3X data_rotated = R * dataCtr;
+
+  // 2. Scale (regular, non-symmetric variant)
+
+  // sum of column-wise dot products
+  const double dots = (gtCtr.cwiseProduct(data_rotated)).sum();
+
+  // sum of column-wise norms
+  const double norms = dataCtr.colwise().squaredNorm().sum();
+
+  // scale
+  const double s = dots / norms;
+
+  // 3. Translation
+  const Vec3 t = gtMean - s * R * dataMean;
+
+  // 4. Translational error
+  const Mat3X diff = gtPt - ((s * R * dataPt).colwise() + t);
+  const Eigen::ArrayXf errors = diff.colwise().norm().transpose();
+  float rmse = std::sqrt(errors.square().sum() / errors.rows());
+  std::cout << rmse << std::endl;
+  
+  Sophus::Sim3f xi = Sophus::Sim3f(Sophus::RxSO3f(s, R), t);
+  for (size_t i = 0; i < N; ++i)
+    poses[i] = xi * poses[i];
 }

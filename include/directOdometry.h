@@ -5,7 +5,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
-#include <sophus/se3.hpp>
+#include <utils.h>
 
 class DirectOdometry {
 private:
@@ -15,7 +15,7 @@ private:
 
   // Image and camera matrix.
   cv::Mat pImg, pDep, cImg;
-  Eigen::Vector4f intr;
+  Intrinsics intr;
   int W, H;
 
   // Image and camera matrix pyramids.
@@ -26,8 +26,7 @@ private:
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> gradx_Pyramid;
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> grady_Pyramid;
 
-  std::vector<Eigen::Vector4f, Eigen::aligned_allocator<Eigen::Vector4f>>
-      intr_Pyramid;
+  std::vector<Intrinsics, Eigen::aligned_allocator<Intrinsics>> intr_Pyramid;
 
   // Robust weight estimation
   static constexpr float INIT_SIGMA = 5.0;
@@ -37,14 +36,14 @@ private:
 
   void calcGradient(const cv::Mat &img, cv::Mat &grad_x, cv::Mat &grad_y);
 
-  void calcResiduals(const Sophus::SE3f &xi, int level,
+  void calcResiduals(const Transform &xi, int level,
                      Eigen::VectorXf &residuals);
 
-  void calcFinalRes(const Sophus::SE3f &xi);
+  void calcFinalRes(const Transform &xi);
 
-  void showError(const Sophus::SE3f &xi, int level);
+  void showError(const Transform &xi, int level);
 
-  void calcJacobian(const Sophus::SE3f &xi, int level, Eigen::MatrixXf &J);
+  void calcJacobian(const Transform &xi, int level, Eigen::MatrixXf &J);
 
   void weighting(const Eigen::VectorXf &residuals, Eigen::VectorXf &weights);
 
@@ -52,7 +51,7 @@ public:
   cv::Mat finalResidual;
 
   DirectOdometry(const cv::Mat &pImg, const cv::Mat &pDep, const cv::Mat &cImg,
-                 const Eigen::Vector4f &intr, float FACTOR) {
+                 const Intrinsics &intr, float FACTOR) {
 
     pImg.convertTo(this->pImg, CV_32FC1, 1.0 / 255.0);
     cImg.convertTo(this->cImg, CV_32FC1, 1.0 / 255.0);
@@ -63,7 +62,7 @@ public:
     finalResidual = cv::Mat::zeros(H, W, CV_32FC1);
   }
 
-  Sophus::SE3f optimize();
+  Transform optimize();
 };
 
 #endif // DVO_DIRECTODOMETRY_H

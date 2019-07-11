@@ -1,7 +1,6 @@
 #include <Eigen/Geometry>
 #include <directOdometry.h>
 #include <opencv2/opencv.hpp>
-#include <sophus/se3.hpp>
 #include <utils.h>
 
 #include <tbb/concurrent_unordered_map.h>
@@ -26,18 +25,24 @@ pangolin::Var<std::function<void(void)>> next_frame_btn("ui.next_frame",
                                                         &nextFrame);
 
 // intrinsics
-const Eigen::Vector4f INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
+const Intrinsics INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
 const float FACTOR = 5000.0;
 
 std::vector<std::string> inputRGBPaths, inputDepPaths;
-std::vector<Sophus::SE3f> gt_poses, poses;
+Poses gt_poses, poses;
 cv::Mat stepRes = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
+bool evaluated = false;
 
 size_t num_img, idx = 1;
 
 bool nextFrame() {
-  if (idx >= num_img)
+  if (idx >= num_img) {
+    if (!evaluated) {
+      evaluate(gt_poses, poses);
+      evaluated = true;
+    }
     return false;
+  }
 
   cv::Mat pImg, pDep, cImg, cDep;
   pImg = cv::imread(inputRGBPaths[idx - 1], cv::IMREAD_GRAYSCALE); // 8 bit
@@ -45,7 +50,7 @@ bool nextFrame() {
   cImg = cv::imread(inputRGBPaths[idx], cv::IMREAD_GRAYSCALE);
 
   DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
-  Sophus::SE3f T_c_p = dvo.optimize();
+  Transform T_c_p = dvo.optimize();
   Sophus::SE3f pose = poses.back() * T_c_p.inverse();
   poses.push_back(pose);
   dvo.finalResidual.convertTo(stepRes, CV_16UC1, 255.0);
