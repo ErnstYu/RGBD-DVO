@@ -123,8 +123,8 @@ void renderCam(const Sophus::SE3f &xi, float lineWidth, const u_int8_t *color,
 template <typename Sim3Derived, typename SE3Derived>
 Sophus::SE3<typename Eigen::ScalarBinaryOpTraits<
     typename Sim3Derived::Scalar, typename SE3Derived::Scalar>::ReturnType>
-operator*(const Sophus::Sim3Base<Sim3Derived>& a,
-          const Sophus::SE3Base<SE3Derived>& b) {
+operator*(const Sophus::Sim3Base<Sim3Derived> &a,
+          const Sophus::SE3Base<SE3Derived> &b) {
   return {a.quaternion().normalized() * b.unit_quaternion(),
           a.rxso3() * b.translation() + a.translation()};
 }
@@ -179,7 +179,7 @@ void evaluate(const Poses &gt_poses, Poses &poses) {
   const Eigen::ArrayXf errors = diff.colwise().norm().transpose();
   float rmse = std::sqrt(errors.square().sum() / errors.rows());
   std::cout << rmse << std::endl;
-  
+
   Sophus::Sim3f xi = Sophus::Sim3f(Sophus::RxSO3f(s, R), t);
   for (size_t i = 0; i < N; ++i)
     poses[i] = xi * poses[i];

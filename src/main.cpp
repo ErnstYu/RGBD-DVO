@@ -30,6 +30,7 @@ const float FACTOR = 5000.0;
 
 std::vector<std::string> inputRGBPaths, inputDepPaths;
 Poses gt_poses, poses;
+Transform T_c_p;
 cv::Mat stepRes = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
 bool evaluated = false;
 
@@ -50,7 +51,7 @@ bool nextFrame() {
   cImg = cv::imread(inputRGBPaths[idx], cv::IMREAD_GRAYSCALE);
 
   DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
-  Transform T_c_p = dvo.optimize();
+  T_c_p = dvo.optimize(T_c_p);
   Sophus::SE3f pose = poses.back() * T_c_p.inverse();
   poses.push_back(pose);
   dvo.finalResidual.convertTo(stepRes, CV_16UC1, 255.0);

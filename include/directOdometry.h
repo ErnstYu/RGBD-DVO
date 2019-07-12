@@ -62,7 +62,8 @@ public:
     finalResidual = cv::Mat::zeros(H, W, CV_32FC1);
   }
 
-  Transform optimize();
+  Transform
+  optimize(Transform init_xi = Transform(Eigen::Matrix4f::Identity()));
 };
 
 #endif // DVO_DIRECTODOMETRY_H

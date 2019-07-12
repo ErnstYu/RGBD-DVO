@@ -368,11 +368,11 @@ void DirectOdometry::calcJacobian(const Transform &xi, const int level,
   }
 }
 
-Transform DirectOdometry::optimize() {
+Transform DirectOdometry::optimize(Transform init_xi) {
 
   makePyramid();
 
-  Transform xi(Eigen::Matrix4f::Identity());
+  Transform xi(init_xi);
   Eigen::VectorXf xi_inc(6);
   Eigen::VectorXf residuals, weights;
   Eigen::MatrixXf J;
