@@ -26,11 +26,11 @@ pangolin::Var<std::function<void(void)>> next_frame_btn("ui.next_frame",
 
 // intrinsics
 const Intrinsics INTR(525.0, 525.0, 319.5, 239.5); // fx, fy, cx, cy
-const float FACTOR = 5000.0;
 
 std::vector<std::string> inputRGBPaths, inputDepPaths;
 Poses gt_poses, poses;
 Transform T_c_p;
+Frame pre, cur;
 cv::Mat stepRes = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
 bool evaluated = false;
 
@@ -45,16 +45,15 @@ bool nextFrame() {
     return false;
   }
 
-  cv::Mat pImg, pDep, cImg, cDep;
-  pImg = cv::imread(inputRGBPaths[idx - 1], cv::IMREAD_GRAYSCALE); // 8 bit
-  pDep = cv::imread(inputDepPaths[idx - 1], cv::IMREAD_ANYDEPTH);  // 16 bit
-  cImg = cv::imread(inputRGBPaths[idx], cv::IMREAD_GRAYSCALE);
+  cur = Frame(inputRGBPaths[idx], inputDepPaths[idx], INTR);
 
-  DirectOdometry dvo(pImg, pDep, cImg, INTR, FACTOR);
+  DirectOdometry dvo(pre, cur);
   T_c_p = dvo.optimize(T_c_p);
   Sophus::SE3f pose = poses.back() * T_c_p.inverse();
   poses.push_back(pose);
   dvo.finalResidual.convertTo(stepRes, CV_16UC1, 255.0);
+
+  pre = cur;
 
   std::cout << idx << std::endl;
   idx += 1;
@@ -86,6 +85,8 @@ int main(int argc, char **argv) {
   }
   poses.push_back(Sophus::SE3f(Eigen::Matrix4f::Identity()));
   num_img = inputRGBPaths.size();
+  pre = Frame(inputRGBPaths[0], inputDepPaths[0], INTR);
+  std::cout << pre.gray_Pyramid.size() << std::endl;
 
   if (show_gui) {
     pangolin::CreateWindowAndBind("Direct Visual Odometry", 1500, 1000);

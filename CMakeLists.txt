@@ -51,9 +51,12 @@ message(STATUS "Found OpenCV ${OpenCV_VERSION} headers in: ${OpenCV_INCLUDE_DIR}
 add_library(utils src/utils.cpp)
 target_link_libraries(utils ${Pangolin_LIBRARIES})
 
+add_library(frame src/frame.cpp)
+target_link_libraries(frame utils ${OpenCV_LIBS})
+
 add_library(directOdometry src/directOdometry.cpp)
-target_link_libraries(directOdometry utils ${OpenCV_LIBS})
+target_link_libraries(directOdometry frame utils ${OpenCV_LIBS})
 
 add_executable(main src/main.cpp)
-target_link_libraries(main utils directOdometry ${OpenCV_LIBS} ${Pangolin_LIBRARIES} ${TBB_LIBRARIES})
+target_link_libraries(main directOdometry frame utils ${OpenCV_LIBS} ${Pangolin_LIBRARIES} ${TBB_LIBRARIES})
 

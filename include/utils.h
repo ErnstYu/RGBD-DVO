@@ -20,6 +20,7 @@ using Mat3X = Eigen::Matrix<float, 3, Eigen::Dynamic>;
 
 const u_int8_t COLOR_GT[3]{0, 250, 0}; // green
 const u_int8_t COLOR_VO[3]{0, 0, 250}; // blue
+const int NUM_PYRAMID = 5;
 
 bool loadFilePaths(const std::string &dataset,
                    std::vector<std::string> &rgbPaths,
@@ -30,6 +31,8 @@ bool poseFromStr(const std::string &line, Sophus::SE3f &pose);
 bool loadGroundTruth(const std::string &dataset, Poses &poses);
 
 void savePoses(const Poses &poses, const std::string &fn);
+
+float interpolate(const float *img_ptr, float x, float y, int w, int h);
 
 void renderCam(const Sophus::SE3f &xi, float lineWidth, const u_int8_t *color,
                float sizeFactor);

@@ -1,113 +1,5 @@
 #include <directOdometry.h>
 
-float interpolate(const float *img_ptr, float x, float y, int w, int h) {
-  float val = nan("1");
-  int x0 = floor(x), y0 = floor(y);
-  int x1 = x0 + 1, y1 = y0 + 1;
-
-  float x1_weight = x - x0, y1_weight = y - y0;
-  float x0_weight = 1 - x1_weight, y0_weight = 1 - y1_weight;
-
-  // Check if warped points are in the image.
-  if (x0 < 0 or x0 >= w)
-    x0_weight = 0;
-  if (x1 < 0 or x1 >= w)
-    x1_weight = 0;
-  if (y0 < 0 or y0 >= h)
-    y0_weight = 0;
-  if (y1 < 0 or y1 >= h)
-    y1_weight = 0;
-  float w00 = x0_weight * y0_weight;
-  float w10 = x1_weight * y0_weight;
-  float w01 = x0_weight * y1_weight;
-  float w11 = x1_weight * y1_weight;
-
-  // Compute interpolated pixel intensity.
-  float sumWeights = w00 + w10 + w01 + w11;
-  float total = 0;
-  if (w00 > 0)
-    total += img_ptr[y0 * w + x0] * w00;
-  if (w01 > 0)
-    total += img_ptr[y1 * w + x0] * w01;
-  if (w10 > 0)
-    total += img_ptr[y0 * w + x1] * w10;
-  if (w11 > 0)
-    total += img_ptr[y1 * w + x1] * w11;
-
-  if (sumWeights > 0)
-    val = total / sumWeights;
-
-  return val;
-}
-
-cv::Mat downsampleImg(const cv::Mat &img) {
-
-  int w = img.cols, h = img.rows;
-  int w_ds = w / 2, h_ds = h / 2;
-
-  float *input_ptr = (float *)img.ptr();
-  cv::Mat img_ds = cv::Mat::zeros(h_ds, w_ds, img.type());
-  float *output_ptr = (float *)img_ds.data;
-
-  for (int y = 0; y < h_ds; ++y) {
-    for (int x = 0; x < w_ds; ++x) {
-      output_ptr[y * w_ds + x] +=
-          (input_ptr[2 * y * w + 2 * x] + input_ptr[2 * y * w + 2 * x + 1] +
-           input_ptr[(2 * y + 1) * w + 2 * x] +
-           input_ptr[(2 * y + 1) * w + 2 * x + 1]) /
-          4.0;
-    }
-  }
-
-  return img_ds;
-}
-
-cv::Mat downsampleDepth(const cv::Mat &depth) {
-
-  int w = depth.cols, h = depth.rows;
-  int w_ds = w / 2, h_ds = h / 2;
-  float *input_ptr = (float *)depth.ptr();
-  cv::Mat depth_ds = cv::Mat::zeros(h_ds, w_ds, depth.type());
-  float *output_ptr = (float *)depth_ds.data;
-
-  for (int y = 0; y < h_ds; ++y) {
-    for (int x = 0; x < w_ds; ++x) {
-      int top_left = 2 * y * w + 2 * x;
-      int top_right = top_left + 1;
-      int btm_left = (2 * y + 1) * w + 2 * x;
-      int btm_right = btm_left + 1;
-      float total = 0.0, count = 0.0;
-
-      // To keep the border of 3D shape, a pixel without depth is ignored.
-      if (input_ptr[top_left] != 0.0) {
-        total += input_ptr[top_left];
-        count += 1.0;
-      }
-
-      if (input_ptr[top_right] != 0.0) {
-        total += input_ptr[top_right];
-        count += 1.0;
-      }
-
-      if (input_ptr[btm_left] != 0.0) {
-        total += input_ptr[btm_left];
-        count += 1.0;
-      }
-
-      if (input_ptr[btm_right] != 0.0) {
-        total += input_ptr[btm_right];
-        count += 1.0;
-      }
-
-      if (count > 0) {
-        output_ptr[y * w_ds + x] = total / count;
-      }
-    }
-  }
-
-  return depth_ds;
-}
-
 float calcError(Eigen::VectorXf &residuals) {
   float num = 0.0, err = 0.0;
 
@@ -120,85 +12,13 @@ float calcError(Eigen::VectorXf &residuals) {
   return err;
 }
 
-void DirectOdometry::calcGradient(const cv::Mat &img, cv::Mat &grad_x,
-                                  cv::Mat &grad_y) {
-
-  float *input_ptr = (float *)img.data;
-
-  int w = img.cols;
-  int h = img.rows;
-
-  grad_x = cv::Mat::zeros(h, w, CV_32FC1);
-  float *output_ptr = (float *)grad_x.data;
-  for (int y = 0; y < h; ++y) {
-    output_ptr[y * h] = input_ptr[y * w + 1] - input_ptr[y * w];
-    output_ptr[y * w + w - 1] =
-        input_ptr[y * w + w - 1] - input_ptr[y * w + w - 2];
-
-    for (int x = 1; x < w - 1; ++x) {
-      float v0 = input_ptr[y * w + (x - 1)];
-      float v1 = input_ptr[y * w + (x + 1)];
-      output_ptr[y * w + x] = (v1 - v0) / 2;
-    }
-  }
-
-  grad_y = cv::Mat::zeros(h, w, CV_32FC1);
-  output_ptr = (float *)grad_y.data;
-  for (int x = 0; x < w; ++x) {
-    output_ptr[x] = input_ptr[w + x] - input_ptr[x];
-    output_ptr[(h - 1) * w + x] =
-        input_ptr[(h - 1) * w + x] - input_ptr[(h - 2) * w + x];
-
-    for (int y = 1; y < h - 1; ++y) {
-      float v0 = input_ptr[(y - 1) * w + x];
-      float v1 = input_ptr[(y + 1) * w + x];
-      output_ptr[y * w + x] = (v1 - v0) / 2;
-    }
-  }
-}
-
-void DirectOdometry::makePyramid() {
-  intr_Pyramid.push_back(this->intr);
-  pImg_Pyramid.push_back(this->pImg);
-  pDep_Pyramid.push_back(this->pDep);
-  cImg_Pyramid.push_back(this->cImg);
-
-  cv::Mat grad_x, grad_y;
-  calcGradient(this->cImg, grad_x, grad_y);
-  gradx_Pyramid.push_back(grad_x);
-  grady_Pyramid.push_back(grad_y);
-
-  for (int i = 1; i < NUM_PYRAMID; ++i) {
-    // downsample camera matrix
-    intr_Pyramid.push_back(intr_Pyramid[i - 1]);
-    intr_Pyramid[i][2] -= 0.5;
-    intr_Pyramid[i][3] -= 0.5;
-    intr_Pyramid[i] *= 0.5;
-
-    // downsample grayscale images
-    cv::Mat pImgDown = downsampleImg(pImg_Pyramid[i - 1]);
-    cv::Mat cImgDown = downsampleImg(cImg_Pyramid[i - 1]);
-    pImg_Pyramid.push_back(pImgDown);
-    cImg_Pyramid.push_back(cImgDown);
-
-    // downsample depth images
-    cv::Mat pDepDown = downsampleDepth(pDep_Pyramid[i - 1]);
-    pDep_Pyramid.push_back(pDepDown);
-
-    // calculate image gradient
-    calcGradient(cImgDown, grad_x, grad_y);
-    gradx_Pyramid.push_back(grad_x);
-    grady_Pyramid.push_back(grad_y);
-  }
-}
-
 void DirectOdometry::calcResiduals(const Transform &xi, const int level,
                                    Eigen::VectorXf &residuals) {
 
-  Intrinsics intr_level = intr_Pyramid[level];
-  cv::Mat cImg_level = cImg_Pyramid[level];
-  cv::Mat pImg_level = pImg_Pyramid[level];
-  cv::Mat pDep_level = pDep_Pyramid[level];
+  Intrinsics intr_level = pre.intr_Pyramid[level];
+  cv::Mat cImg_level = cur.gray_Pyramid[level];
+  cv::Mat pImg_level = pre.gray_Pyramid[level];
+  cv::Mat pDep_level = pre.depth_Pyramid[level];
 
   int w = pImg_level.cols;
   int h = pImg_level.rows;
@@ -275,9 +95,9 @@ void DirectOdometry::calcFinalRes(const Transform &xi) {
 
   float *ptr_res = (float *)finalResidual.data;
 
-  for (int v = 0; v < H; ++v) {
-    for (int u = 0; u < W; ++u) {
-      int pos = v * W + u;
+  for (int v = 0; v < pre.H; ++v) {
+    for (int u = 0; u < pre.W; ++u) {
+      int pos = v * pre.W + u;
       if (!std::isnan(res[pos]))
         ptr_res[pos] = abs(res[pos] * 255.0);
     }
@@ -289,12 +109,12 @@ void DirectOdometry::showError(const Transform &xi, const int level) {
   Eigen::VectorXf res;
   calcResiduals(xi, 0, res);
 
-  cv::Mat err = cv::Mat::zeros(H, W, CV_32FC1);
+  cv::Mat err = cv::Mat::zeros(pre.H, pre.W, CV_32FC1);
   float *ptr_err = (float *)err.data;
 
-  for (int v = 0; v < H; ++v) {
-    for (int u = 0; u < W; ++u) {
-      int pos = v * W + u;
+  for (int v = 0; v < pre.H; ++v) {
+    for (int u = 0; u < pre.W; ++u) {
+      int pos = v * pre.W + u;
       if (!std::isnan(res[pos]))
         ptr_err[pos] = abs(res[pos] * 255.0);
     }
@@ -306,11 +126,11 @@ void DirectOdometry::showError(const Transform &xi, const int level) {
 void DirectOdometry::calcJacobian(const Transform &xi, const int level,
                                   Eigen::MatrixXf &J) {
 
-  Intrinsics intr_level = intr_Pyramid[level];
-  cv::Mat cImg_level = cImg_Pyramid[level];
-  cv::Mat pDep_level = pDep_Pyramid[level];
-  cv::Mat gradx_level = gradx_Pyramid[level];
-  cv::Mat grady_level = grady_Pyramid[level];
+  Intrinsics intr_level = pre.intr_Pyramid[level];
+  cv::Mat cImg_level = cur.gray_Pyramid[level];
+  cv::Mat pDep_level = pre.depth_Pyramid[level];
+  cv::Mat gradx_level = cur.gradx_Pyramid[level];
+  cv::Mat grady_level = cur.grady_Pyramid[level];
 
   // Camera intrinsics
   float fx = intr_level(0);
@@ -370,8 +190,6 @@ void DirectOdometry::calcJacobian(const Transform &xi, const int level,
 
 Transform DirectOdometry::optimize(Transform init_xi) {
 
-  makePyramid();
-
   Transform xi(init_xi);
   Eigen::VectorXf xi_inc(6);
   Eigen::VectorXf residuals, weights;
@@ -393,7 +211,7 @@ Transform DirectOdometry::optimize(Transform init_xi) {
         xi = Transform::exp(xi_inc).inverse() * xi;
         break;
       }
-      if (error / error_prev > 0.997)
+      if (error / error_prev > (1 - 3e-3))
         break;
       // std::cout << itr << ": " << error << std::endl;
       error_prev = error;
