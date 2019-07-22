@@ -117,7 +117,9 @@ void Frame::makePyramid(const cv::Mat &gray, const cv::Mat &depth,
     intr_Pyramid[i] *= 0.5;
 
     // downsample grayscale images
-    cv::Mat grayDown = downsampleImg(gray_Pyramid[i - 1]);
+    cv::Mat grayDown;
+    cv::blur(gray_Pyramid[i - 1], grayDown, cv::Size(3, 3));
+    grayDown = downsampleImg(grayDown);
     gray_Pyramid.push_back(grayDown);
 
     // downsample depth images
