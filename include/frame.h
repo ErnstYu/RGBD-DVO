@@ -20,7 +20,7 @@ public:
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> gradx_Pyramid;
   std::vector<cv::Mat, Eigen::aligned_allocator<cv::Mat>> grady_Pyramid;
 
-  Frame(){}
+  Frame() {}
 
   Frame(const std::string &rgbPath, const std::string &depPath,
         const Intrinsics &intr) {
@@ -31,7 +31,8 @@ public:
     gray.convertTo(gray, CV_32FC1, 1.0 / 255.0);
     depth.convertTo(depth, CV_32FC1, 1.0 / 5000.0);
 
-    H = gray.rows; W = gray.cols;
+    H = gray.rows;
+    W = gray.cols;
     makePyramid(gray, depth, intr);
   }
 };

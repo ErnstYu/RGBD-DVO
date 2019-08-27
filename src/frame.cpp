@@ -11,7 +11,7 @@ cv::Mat downsampleImg(const cv::Mat &img) {
 
   for (int y = 0; y < h_ds; ++y) {
     for (int x = 0; x < w_ds; ++x) {
-      output_ptr[y * w_ds + x] +=
+      output_ptr[y * w_ds + x] =
           (input_ptr[2 * y * w + 2 * x] + input_ptr[2 * y * w + 2 * x + 1] +
            input_ptr[(2 * y + 1) * w + 2 * x] +
            input_ptr[(2 * y + 1) * w + 2 * x + 1]) /
@@ -69,6 +69,7 @@ void Frame::calcGradient(const cv::Mat &img, cv::Mat &grad_x, cv::Mat &grad_y) {
   int w = img.cols;
   int h = img.rows;
 
+  // gradient in x-direction
   grad_x = cv::Mat::zeros(h, w, CV_32FC1);
   float *output_ptr = (float *)grad_x.data;
   for (int y = 0; y < h; ++y) {
@@ -83,6 +84,7 @@ void Frame::calcGradient(const cv::Mat &img, cv::Mat &grad_x, cv::Mat &grad_y) {
     }
   }
 
+  // gradient in y-direction
   grad_y = cv::Mat::zeros(h, w, CV_32FC1);
   output_ptr = (float *)grad_y.data;
   for (int x = 0; x < w; ++x) {

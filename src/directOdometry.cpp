@@ -229,8 +229,15 @@ Transform DirectOdometry::optimize(Transform init_xi) {
       for (int i = 0; i < J.rows(); ++i)
         J.row(i) = weights[i] * J.row(i);
 
+      // Gauss-Newton method
       // Jt * (W * J) * xi_inc = - Jt * (W * r)
       xi_inc = (Jt * J).ldlt().solve(-Jt * residuals);
+
+      // Levenberg-Marquardt method
+      // (Jt * (W * J) + lambda * diag(Jt * (W * J))) * xi_inc = - Jt * (W * r)
+      //
+      // xi_inc = (Jt * J + lambda * (Jt * J).diagonal().asDiagonal())
+      //          .ldlt().solve(-Jt * residuals);
 
       xi = Transform::exp(xi_inc) * xi;
     }
