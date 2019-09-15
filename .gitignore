@@ -2,3 +2,13 @@
 /data
 /.vscode
 /cmake_modules
+*.aux
+*.bbl
+*.blg
+*.log
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+
